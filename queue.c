@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "queue.h"
+#include "strnatcmp.h"
 
 /*
  * Create empty queue.
@@ -12,15 +13,33 @@
 queue_t *q_new()
 {
     queue_t *q = malloc(sizeof(queue_t));
-    /* TODO: What if malloc returned NULL? */
+    /* Return NULL if malloc failed */
+    if (!q) {
+        return NULL;
+    }
+    /* Initialize queue */
     q->head = NULL;
+    q->tail = NULL;
+    q->size = 0;
     return q;
 }
 
 /* Free all storage used by queue */
 void q_free(queue_t *q)
 {
-    /* TODO: How about freeing the list elements and the strings? */
+    /* No effect if q is NULL */
+    if (!q) {
+        return;
+    }
+    /* Free all elements space */
+    for (list_ele_t *cur = q->head, *prev = NULL; cur;) {
+        prev = cur;
+        cur = cur->next;
+        /* Free value space */
+        free(prev->value);
+        /* Free list_ele structure */
+        free(prev);
+    }
     /* Free queue structure */
     free(q);
 }
@@ -35,12 +54,30 @@ void q_free(queue_t *q)
 bool q_insert_head(queue_t *q, char *s)
 {
     list_ele_t *newh;
-    /* TODO: What should you do if the q is NULL? */
+    /* Return false if q is NULL */
+    if (!q) {
+        return false;
+    }
     newh = malloc(sizeof(list_ele_t));
-    /* Don't forget to allocate space for the string and copy it */
-    /* What if either call to malloc returns NULL? */
+    /* Return false if malloc failed */
+    if (!newh) {
+        return false;
+    }
+    /* Return false if malloc failed */
+    newh->value = malloc(strlen(s) + 1);
+    if (!newh->value) {
+        /* Free allocated space */
+        free(newh);
+        return false;
+    }
     newh->next = q->head;
-    q->head = newh;
+    strncpy(newh->value, s, strlen(s) + 1);
+    if (q->size == 0) {
+        q->head = q->tail = newh;
+    } else {
+        q->head = newh;
+    }
+    (q->size)++;
     return true;
 }
 
@@ -53,10 +90,33 @@ bool q_insert_head(queue_t *q, char *s)
  */
 bool q_insert_tail(queue_t *q, char *s)
 {
-    /* TODO: You need to write the complete code for this function */
-    /* Remember: It should operate in O(1) time */
-    /* TODO: Remove the above comment when you are about to implement. */
-    return false;
+    /* Return false if q is NULL */
+    if (!q) {
+        return false;
+    }
+    list_ele_t *newt;
+    newt = malloc(sizeof(list_ele_t));
+    /* Return false if malloc failed */
+    if (!newt) {
+        return false;
+    }
+    newt->value = malloc(strlen(s) + 1);
+    /* Return false if malloc failed */
+    if (!newt->value) {
+        /* Free allocated space */
+        free(newt);
+        return false;
+    }
+    newt->next = NULL;
+    strncpy(newt->value, s, strlen(s) + 1);
+    if (q->size == 0) {
+        q->tail = q->head = newt;
+    } else {
+        q->tail->next = newt;
+        q->tail = newt;
+    }
+    (q->size)++;
+    return true;
 }
 
 /*
@@ -69,9 +129,25 @@ bool q_insert_tail(queue_t *q, char *s)
  */
 bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
 {
-    /* TODO: You need to fix up this code. */
-    /* TODO: Remove the above comment when you are about to implement. */
+    /* Return false if q is NULL or empty */
+    if (!q || q->size == 0) {
+        return false;
+    }
+    /* Copy string to sp if sp is non-NULL */
+    if (sp) {
+        /* Copy the string that its length is smaller than bufsize */
+        strncpy(sp, q->head->value, bufsize - 1);
+        sp[bufsize - 1] = '\0';
+    }
+    list_ele_t *tmp = q->head;
     q->head = q->head->next;
+    (q->size)--;
+    /* Set tail to NULL if queue is empty */
+    q->tail = q->size == 0 ? q->head : q->tail;
+    /* Free value space */
+    free(tmp->value);
+    /* Free list_ele structure */
+    free(tmp);
     return true;
 }
 
@@ -81,9 +157,10 @@ bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
  */
 int q_size(queue_t *q)
 {
-    /* TODO: You need to write the code for this function */
-    /* Remember: It should operate in O(1) time */
-    /* TODO: Remove the above comment when you are about to implement. */
+    /* Return 0 if q is NULL */
+    if (!q) {
+        return 0;
+    }
     return q->size;
 }
 
@@ -96,8 +173,65 @@ int q_size(queue_t *q)
  */
 void q_reverse(queue_t *q)
 {
-    /* TODO: You need to write the code for this function */
-    /* TODO: Remove the above comment when you are about to implement. */
+    /* No effect if q is NULL or empty */
+    if (!q || q->size == 0) {
+        return;
+    }
+    /* Reverse queue */
+    for (list_ele_t *prev = NULL, *cur = q->head; cur;) {
+        list_ele_t *tmp = cur;
+        cur = cur->next;
+        tmp->next = prev;
+        prev = tmp;
+    }
+    list_ele_t *tmp;
+    tmp = q->head;
+    q->head = q->tail;
+    q->tail = tmp;
+}
+
+list_ele_t *divide_and_conquer(list_ele_t *head)
+{
+    if (!head || !head->next) {
+        return head;
+    }
+    list_ele_t *left = head;
+    list_ele_t *right = head->next;
+    list_ele_t *merge = NULL;
+
+    /* left : 1, right : 2 */
+    while (right && right->next) {
+        left = left->next;
+        right = right->next->next;
+    }
+    right = left->next;
+    left->next = NULL;
+
+    left = divide_and_conquer(head);
+    right = divide_and_conquer(right);
+
+    while (left && right) {
+        if (strnatcmp(left->value, right->value) < 0) {
+            if (!merge) {
+                merge = head = left;
+            } else {
+                merge->next = left;
+                merge = merge->next;
+            }
+            left = left->next;
+        } else {
+            if (!merge) {
+                merge = head = right;
+            } else {
+                merge->next = right;
+                merge = merge->next;
+            }
+            right = right->next;
+        }
+    }
+
+    merge->next = left ? left : right ? right : NULL;
+    return head;
 }
 
 /*
@@ -107,6 +241,18 @@ void q_reverse(queue_t *q)
  */
 void q_sort(queue_t *q)
 {
-    /* TODO: You need to write the code for this function */
-    /* TODO: Remove the above comment when you are about to implement. */
+    /* No effect if q is NULL or empty */
+    if (!q || q->size == 0) {
+        return;
+    }
+    /* Do nothing if q has only one */
+    if (q->size == 1) {
+        return;
+    }
+    q->head = divide_and_conquer(q->head);
+    list_ele_t *tmp = q->head;
+    while (tmp->next) {
+        tmp = tmp->next;
+    }
+    q->tail = tmp;
 }
