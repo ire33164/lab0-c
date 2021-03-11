@@ -64,7 +64,7 @@ bool q_insert_head(queue_t *q, char *s)
         return false;
     }
     /* Return false if malloc failed */
-    newh->value = malloc(strlen(s) + 1);
+    newh->value = malloc((strlen(s) + 1) * sizeof(char));
     if (!newh->value) {
         /* Free allocated space */
         free(newh);
@@ -77,7 +77,7 @@ bool q_insert_head(queue_t *q, char *s)
     } else {
         q->head = newh;
     }
-    (q->size)++;
+    q->size++;
     return true;
 }
 
@@ -100,7 +100,7 @@ bool q_insert_tail(queue_t *q, char *s)
     if (!newt) {
         return false;
     }
-    newt->value = malloc(strlen(s) + 1);
+    newt->value = malloc((strlen(s) + 1) * sizeof(char));
     /* Return false if malloc failed */
     if (!newt->value) {
         /* Free allocated space */
@@ -115,7 +115,7 @@ bool q_insert_tail(queue_t *q, char *s)
         q->tail->next = newt;
         q->tail = newt;
     }
-    (q->size)++;
+    q->size++;
     return true;
 }
 
@@ -141,7 +141,7 @@ bool q_remove_head(queue_t *q, char *sp, size_t bufsize)
     }
     list_ele_t *tmp = q->head;
     q->head = q->head->next;
-    (q->size)--;
+    q->size--;
     /* Set tail to NULL if queue is empty */
     q->tail = q->size == 0 ? q->head : q->tail;
     /* Free value space */
@@ -190,6 +190,41 @@ void q_reverse(queue_t *q)
     q->tail = tmp;
 }
 
+/* split from the middle of queue */
+void split(list_ele_t *head, list_ele_t **q1, list_ele_t **q2)
+{
+    list_ele_t *slow = head;
+    list_ele_t *fast = head->next;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    *q1 = head;
+    *q2 = slow->next;
+    slow->next = NULL;
+    return;
+}
+
+list_ele_t *merge(list_ele_t *q1, list_ele_t *q2)
+{
+    list_ele_t *head = NULL;
+    list_ele_t **tmp = &head;
+    while (q1 && q2) {
+        if (strnatcmp(q1->value, q2->value) < 0) {
+            *tmp = q1;
+            q1 = q1->next;
+            tmp = &((*tmp)->next);
+        } else {
+            *tmp = q2;
+            q2 = q2->next;
+            tmp = &((*tmp)->next);
+        }
+    }
+    /* add the last value which is the maximum value of the queue */
+    *tmp = q1 ? q1 : q2;
+    return head;
+}
+
 list_ele_t *divide_and_conquer(list_ele_t *head)
 {
     if (!head || !head->next) {
@@ -197,41 +232,11 @@ list_ele_t *divide_and_conquer(list_ele_t *head)
     }
     list_ele_t *left = head;
     list_ele_t *right = head->next;
-    list_ele_t *merge = NULL;
 
-    /* left : 1, right : 2 */
-    while (right && right->next) {
-        left = left->next;
-        right = right->next->next;
-    }
-    right = left->next;
-    left->next = NULL;
-
-    left = divide_and_conquer(head);
+    split(head, &left, &right);
+    left = divide_and_conquer(left);
     right = divide_and_conquer(right);
-
-    while (left && right) {
-        if (strnatcmp(left->value, right->value) < 0) {
-            if (!merge) {
-                merge = head = left;
-            } else {
-                merge->next = left;
-                merge = merge->next;
-            }
-            left = left->next;
-        } else {
-            if (!merge) {
-                merge = head = right;
-            } else {
-                merge->next = right;
-                merge = merge->next;
-            }
-            right = right->next;
-        }
-    }
-
-    merge->next = left ? left : right ? right : NULL;
-    return head;
+    return merge(left, right);
 }
 
 /*

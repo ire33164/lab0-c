@@ -4,3 +4,5 @@ qtest
 *.dSYM
 .vscode
 .devcontainer
+perf.*
+tags
